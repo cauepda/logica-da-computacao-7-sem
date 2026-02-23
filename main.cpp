@@ -30,6 +30,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    std::cout << "O resultado de '" << argv[1] << "' é: " << resultado_atual << "\n";
+    std::cout << resultado_atual;
     return 0;
 }
