@@ -1,50 +1,64 @@
 import sys
 
-def main():
-    if len(sys.argv) < 2:
-        raise ValueError("Nenhuma expressao fornecida.")
-    
-    expr = sys.argv[1].split()
-    
-    if not expr:
-        raise ValueError("Expressao nao comeca com um numero.")
-    
-    try:
-        resultado_atual = int(expr[0])
-    except ValueError:
-        raise ValueError("Expressao nao comeca com um numero.")
-    
-    leu_algum_operador = False
-    i = 1
-    
-    while i < len(expr):
-        if i >= len(expr):
-            break
-        
-        op = expr[i]
-        leu_algum_operador = True
-        
-        if i + 1 >= len(expr):
-            raise ValueError("Faltando numero apos operador.")
-        
-        try:
-            proximo_n = int(expr[i + 1])
-        except ValueError:
-            raise ValueError("Faltando numero apos operador.")
-        
-        if op == '+':
-            resultado_atual += proximo_n
-        elif op == '-':
-            resultado_atual -= proximo_n
-        else:
-            raise ValueError(f"Operador não reconhecido: {op}")
-        
-        i += 2
-    
-    if not leu_algum_operador:
-        raise ValueError("Expressao incompleta (sem operador).")
-    
-    print(resultado_atual)
+if len(sys.argv) < 2:
+    raise Exception("Nenhuma expressao fornecida")
 
-if __name__ == "__main__":
-    main()
+expression = sys.argv[1]
+
+i = 0
+n = len(expression)
+
+# Ignora espacos iniciais
+while i < n and expression[i] == ' ':
+    i += 1
+
+# Primeiro token tem que ser um numero
+if i >= n or not expression[i].isdigit():
+    raise Exception("Expressao invalida")
+
+# Le o primeiro numero
+num_str = ""
+while i < n and expression[i].isdigit():
+    num_str += expression[i]
+    i += 1
+
+resultado = int(num_str)
+
+# Ignora espacos
+while i < n and expression[i] == ' ':
+    i += 1
+
+# Le pares de (operador, numero) ate acabar a expressao
+while i < n:
+    # Le o operador
+    if expression[i] not in ['+', '-']:
+        raise Exception("Caractere invalido: " + expression[i])
+
+    operador = expression[i]
+    i += 1
+
+    # Ignora espacos
+    while i < n and expression[i] == ' ':
+        i += 1
+
+    # Apos o operador tem que vir um numero
+    if i >= n or not expression[i].isdigit():
+        raise Exception("Esperado numero apos operador")
+
+    num_str = ""
+    while i < n and expression[i].isdigit():
+        num_str += expression[i]
+        i += 1
+
+    numero = int(num_str)
+
+    if operador == '+':
+        resultado += numero
+    elif operador == '-':
+        resultado -= numero
+
+    # Ignora espacos
+    while i < n and expression[i] == ' ':
+        i += 1
+
+print(resultado)
