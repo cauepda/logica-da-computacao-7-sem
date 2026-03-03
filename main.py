@@ -1,3 +1,4 @@
+import sys
 class Token():
     def __init__(self, type: str, value: int | str):
         """
@@ -84,6 +85,5 @@ class Parser():
             raise Exception("[Parser] Unexpected token after expression: " + Parser.lexer.next.type)
         return resultado
 
-
 if __name__ == "__main__":
-    print(Parser.run("5 + 3 - 2"))
+    print(Parser.run(sys.argv[1]))
