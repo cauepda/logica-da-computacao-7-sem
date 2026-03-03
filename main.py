@@ -1,64 +1,89 @@
-import sys
+class Token():
+    def __init__(self, type: str, value: int | str):
+        """
+            type: string. É o tipo do token
+            value: integer | string. É o valor do token
+            (INT, 5) representa o número 5
+            (PLUS, '+') representa o símbolo +
+            (MINUS, '-') representa o símbolo -
+            (EOF, '') representa o final da string de entrada
+        """
+        self.type = type
+        self.value = value
 
-if len(sys.argv) < 2:
-    raise Exception("Nenhuma expressao fornecida")
 
-expression = sys.argv[1]
+class Lexer():
+    def __init__(self, source: str, position: int, next: Token):
+        """
+            source: string. É o código-fonte que será tokenizado
+            position: integer. É a posição atual que o Lexer está separando
+            next: Token. É o último token separado
+            selectNext(): lê o próximo token e atualiza o atributo next
+        """
+        self.source = source
+        self.position = position
+        self.next = next
 
-i = 0
-n = len(expression)
+    def selectNext(self):
+        """
+            1. realizará a tokenização
+            2. irá quebrar o código fonte sob demanda, sempre analisando um caractere específico representado pelo índice position
+            3. Ao achar um símbolo de interesse, irá parar e atualizar o atributo next com o token correspondente
+            4. Ao ser chamada novamente, continuará a análise de onde parou (position atual).
+            5. O método deverá ignorar os espaços em branco.
+        """
+        while self.position < len(self.source):
+            caracter = self.source[self.position]
 
-# Ignora espacos iniciais
-while i < n and expression[i] == ' ':
-    i += 1
+            if caracter == ' ':
+                self.position += 1
+                continue
+            elif caracter.isdigit():
+                num_str = ""
+                while self.position < len(self.source) and self.source[self.position].isdigit():
+                    num_str += self.source[self.position]
+                    self.position += 1
+                self.next = Token("INT", int(num_str))
+                return
+            else:
+                if caracter == '+':
+                    self.next = Token("PLUS", '+')
+                elif caracter == '-':
+                    self.next = Token("MINUS", '-')
+                else:
+                    raise Exception("Caractere invalido: " + caracter)
+                self.position += 1
+                return
+        self.next = Token("EOF", "")
 
-# Primeiro token tem que ser um numero
-if i >= n or not expression[i].isdigit():
-    raise Exception("Expressao invalida")
+class Parser():
+    lexer = None
 
-# Le o primeiro numero
-num_str = ""
-while i < n and expression[i].isdigit():
-    num_str += expression[i]
-    i += 1
+    def parseExpression():
+        if Parser.lexer.next.type != "INT":
+            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT")
+        resultado = Parser.lexer.next.value
+        Parser.lexer.selectNext()
+        while Parser.lexer.next.type in ("PLUS", "MINUS"):
+            op = Parser.lexer.next.type
+            Parser.lexer.selectNext()
+            if Parser.lexer.next.type != "INT":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT")
+            if op == "PLUS":
+                resultado += Parser.lexer.next.value
+            elif op == "MINUS":
+                resultado -= Parser.lexer.next.value
+            Parser.lexer.selectNext()
+        return resultado
 
-resultado = int(num_str)
+    def run(code: str) -> int:
+        Parser.lexer = Lexer(code, 0, None)
+        Parser.lexer.selectNext()
+        resultado = Parser.parseExpression()
+        if Parser.lexer.next.type != "EOF":
+            raise Exception("[Parser] Unexpected token after expression: " + Parser.lexer.next.type)
+        return resultado
 
-# Ignora espacos
-while i < n and expression[i] == ' ':
-    i += 1
 
-# Le pares de (operador, numero) ate acabar a expressao
-while i < n:
-    # Le o operador
-    if expression[i] not in ['+', '-']:
-        raise Exception("Caractere invalido: " + expression[i])
-
-    operador = expression[i]
-    i += 1
-
-    # Ignora espacos
-    while i < n and expression[i] == ' ':
-        i += 1
-
-    # Apos o operador tem que vir um numero
-    if i >= n or not expression[i].isdigit():
-        raise Exception("Esperado numero apos operador")
-
-    num_str = ""
-    while i < n and expression[i].isdigit():
-        num_str += expression[i]
-        i += 1
-
-    numero = int(num_str)
-
-    if operador == '+':
-        resultado += numero
-    elif operador == '-':
-        resultado -= numero
-
-    # Ignora espacos
-    while i < n and expression[i] == ' ':
-        i += 1
-
-print(resultado)
+if __name__ == "__main__":
+    print(Parser.run("5 + 3 - 2"))
