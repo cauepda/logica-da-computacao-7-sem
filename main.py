@@ -18,13 +18,13 @@ class Lexer():
             source: string. É o código-fonte que será tokenizado
             position: integer. É a posição atual que o Lexer está separando
             next: Token. É o último token separado
-            selectNext(): lê o próximo token e atualiza o atributo next
+            select_next(): lê o próximo token e atualiza o atributo next
         """
         self.source = source
         self.position = position
         self.next = next
 
-    def selectNext(self):
+    def select_next(self):
         """
             1. realizará a tokenização
             2. irá quebrar o código fonte sob demanda, sempre analisando um caractere específico representado pelo índice position
@@ -59,27 +59,27 @@ class Lexer():
 class Parser():
     lexer = None
 
-    def parseExpression():
+    def parse_expression():
         if Parser.lexer.next.type != "INT":
             raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT")
         resultado = Parser.lexer.next.value
-        Parser.lexer.selectNext()
+        Parser.lexer.select_next()
         while Parser.lexer.next.type in ("PLUS", "MINUS"):
             op = Parser.lexer.next.type
-            Parser.lexer.selectNext()
+            Parser.lexer.select_next()
             if Parser.lexer.next.type != "INT":
                 raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT")
             if op == "PLUS":
                 resultado += Parser.lexer.next.value
             elif op == "MINUS":
                 resultado -= Parser.lexer.next.value
-            Parser.lexer.selectNext()
+            Parser.lexer.select_next()
         return resultado
 
     def run(code: str) -> int:
         Parser.lexer = Lexer(code, 0, None)
-        Parser.lexer.selectNext()
-        resultado = Parser.parseExpression()
+        Parser.lexer.select_next()
+        resultado = Parser.parse_expression()
         if Parser.lexer.next.type != "EOF":
             raise Exception("[Parser] Unexpected token after expression: " + Parser.lexer.next.type)
         return resultado
