@@ -52,7 +52,7 @@ class Lexer():
                 elif caracter == '-':
                     self.next = Token("MINUS", '-')
                 else:
-                    raise Exception("Caractere invalido: " + caracter)
+                    raise Exception("[Lexer] Invalid character: " + caracter)
                 self.position += 1
                 return
         self.next = Token("EOF", "")
