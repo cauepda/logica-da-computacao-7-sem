@@ -51,6 +51,14 @@ class Lexer():
                     self.next = Token("PLUS", '+')
                 elif caracter == '-':
                     self.next = Token("MINUS", '-')
+                elif caracter == '*':
+                    self.next = Token("MULT", '*')
+                elif caracter == '/':
+                    self.next = Token("DIV", '/')
+                elif caracter == '(':
+                    self.next = Token("OPEN_PAR", '(')
+                elif caracter == ')':
+                    self.next = Token("CLOSE_PAR", ')')
                 else:
                     raise Exception("[Lexer] Invalid character: " + caracter)
                 self.position += 1
@@ -61,26 +69,74 @@ class Parser():
     lexer = None
 
     def parse_expression():
-        if Parser.lexer.next.type != "INT":
-            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT")
-        resultado = Parser.lexer.next.value
-        Parser.lexer.select_next()
+        term = Parser.parseTerm()
+
         while Parser.lexer.next.type in ("PLUS", "MINUS"):
             op = Parser.lexer.next.type
             Parser.lexer.select_next()
-            if Parser.lexer.next.type != "INT":
-                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT")
+
+            next_term = Parser.parseTerm()
+
             if op == "PLUS":
-                resultado += Parser.lexer.next.value
+                term += next_term
             elif op == "MINUS":
-                resultado -= Parser.lexer.next.value
+                term -= next_term
+
+        return term
+    
+    def parseTerm():
+        factor = Parser.parseFactor()
+
+        while Parser.lexer.next.type in ("MULT", "DIV"):
+            op = Parser.lexer.next.type
             Parser.lexer.select_next()
-        return resultado
+
+            next_factor = Parser.parseFactor()
+
+            if op == "MULT":
+                factor *= next_factor
+            elif op == "DIV":
+                factor //= next_factor
+
+        return factor
+
+
+    def parseFactor():
+        if Parser.lexer.next.type == "INT":
+            resultado = Parser.lexer.next.value
+            Parser.lexer.select_next()
+            return resultado
+
+        elif Parser.lexer.next.type in ("PLUS", "MINUS"):
+            op = Parser.lexer.next.type
+            Parser.lexer.select_next()
+
+            if op == "PLUS":
+                return Parser.parseFactor()
+            elif op == "MINUS":
+                return -Parser.parseFactor()
+        
+        elif Parser.lexer.next.type == "OPEN_PAR":
+            Parser.lexer.select_next()
+
+            expr = Parser.parse_expression()
+
+            if Parser.lexer.next.type != "CLOSE_PAR":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected CLOSE_PAR")
+                
+            Parser.lexer.select_next()
+            return expr
+        else:
+            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT, PLUS, MINUS or OPEN_PAR")
+
+        
 
     def run(code: str) -> int:
+
         Parser.lexer = Lexer(code, 0, None)
         Parser.lexer.select_next()
         resultado = Parser.parse_expression()
+
         if Parser.lexer.next.type != "EOF":
             raise Exception("[Parser] Unexpected token after expression: " + Parser.lexer.next.type)
         return resultado
