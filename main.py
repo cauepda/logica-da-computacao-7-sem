@@ -69,13 +69,13 @@ class Parser():
     lexer = None
 
     def parse_expression():
-        term = Parser.parseTerm()
+        term = Parser.parse_term()
 
         while Parser.lexer.next.type in ("PLUS", "MINUS"):
             op = Parser.lexer.next.type
             Parser.lexer.select_next()
 
-            next_term = Parser.parseTerm()
+            next_term = Parser.parse_term()
 
             if op == "PLUS":
                 term += next_term
@@ -84,14 +84,14 @@ class Parser():
 
         return term
     
-    def parseTerm():
-        factor = Parser.parseFactor()
+    def parse_term():
+        factor = Parser.parse_factor()
 
         while Parser.lexer.next.type in ("MULT", "DIV"):
             op = Parser.lexer.next.type
             Parser.lexer.select_next()
 
-            next_factor = Parser.parseFactor()
+            next_factor = Parser.parse_factor()
 
             if op == "MULT":
                 factor *= next_factor
@@ -101,7 +101,7 @@ class Parser():
         return factor
 
 
-    def parseFactor():
+    def parse_factor():
         if Parser.lexer.next.type == "INT":
             resultado = Parser.lexer.next.value
             Parser.lexer.select_next()
@@ -112,9 +112,9 @@ class Parser():
             Parser.lexer.select_next()
 
             if op == "PLUS":
-                return Parser.parseFactor()
+                return Parser.parse_factor()
             elif op == "MINUS":
-                return -Parser.parseFactor()
+                return -Parser.parse_factor()
         
         elif Parser.lexer.next.type == "OPEN_PAR":
             Parser.lexer.select_next()
