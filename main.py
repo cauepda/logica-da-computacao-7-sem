@@ -97,7 +97,7 @@ class Parser():
 
     def parse_factor():
         if Parser.lexer.next.type == "INT":
-            node = IntVal(Parser.lexer.next.value)
+            node = IntVal(Parser.lexer.next.value, [])
             Parser.lexer.select_next()
             return node
 
@@ -183,7 +183,7 @@ class UnOp(Node):
 
     
 class IntVal(Node):
-    def __init__(self, value: int):
+    def __init__(self, value: int, children):
         super().__init__(value, [])
     
     def evaluate(self):
