@@ -160,6 +160,8 @@ class BinOp(Node):
         elif value == "MULT":
             return left_value * right_value
         elif value == "DIV":
+            if right_value == 0:
+                raise Exception("[Semantic] Division by zero")
             return left_value // right_value
         else:
             raise Exception("[Semantic] Invalid operator: " + value)
