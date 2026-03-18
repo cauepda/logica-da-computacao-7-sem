@@ -143,43 +143,43 @@ class Node(ABC):
 
 
 class BinOp(Node):
-    def __init__(self, op: str, children: Node):
+    def __init__(self, value: str, children: Node):
         if len(children) != 2:
             raise Exception("[Semantic] BinOp must have exactly 2 children")
-        super().__init__(op, children)
+        super().__init__(value, children)
     
     def evaluate(self):
-        op = self.value
+        value = self.value
         left_value = self.children[0].evaluate()
         right_value = self.children[1].evaluate()
 
-        if op == "PLUS":
+        if value == "PLUS":
              return left_value + right_value
-        elif op == "MINUS":
+        elif value == "MINUS":
             return left_value - right_value
-        elif op == "MULT":
+        elif value == "MULT":
             return left_value * right_value
-        elif op == "DIV":
+        elif value == "DIV":
             return left_value // right_value
         else:
-            raise Exception("[Semantic] Invalid operator: " + op)
+            raise Exception("[Semantic] Invalid operator: " + value)
     
 class UnOp(Node):
-    def __init__(self, op: str, children: Node):
+    def __init__(self, value: str, children: Node):
         if len(children) != 1:
             raise Exception("[Semantic] UnOp must have exactly 1 child")
-        super().__init__(op, children)
+        super().__init__(value, children)
 
     def evaluate(self):
-        op = self.value
+        value = self.value
         central_value = self.children[0].evaluate()
 
-        if op == "PLUS":
+        if value == "PLUS":
             return central_value
-        elif op == "MINUS":
+        elif value == "MINUS":
             return -central_value
         else:
-            raise Exception("[Semantic] Invalid operator: " + op)
+            raise Exception("[Semantic] Invalid operator: " + value)
 
     
 class IntVal(Node):
