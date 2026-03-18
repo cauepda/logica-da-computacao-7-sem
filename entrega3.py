@@ -1,6 +1,4 @@
 import sys
-from abc import ABC, abstractmethod
-
 class Token():
     def __init__(self, type: str, value: int | str):
         """
@@ -71,42 +69,52 @@ class Parser():
     lexer = None
 
     def parse_expression():
-        node = Parser.parse_term()
+        term = Parser.parse_term()
 
         while Parser.lexer.next.type in ("PLUS", "MINUS"):
             op = Parser.lexer.next.type
             Parser.lexer.select_next()
 
             next_term = Parser.parse_term()
-            node = BinOp(op, [node, next_term])
 
-        return node
+            if op == "PLUS":
+                term += next_term
+            elif op == "MINUS":
+                term -= next_term
+
+        return term
     
     def parse_term():
-        node = Parser.parse_factor()
+        factor = Parser.parse_factor()
 
         while Parser.lexer.next.type in ("MULT", "DIV"):
             op = Parser.lexer.next.type
             Parser.lexer.select_next()
 
             next_factor = Parser.parse_factor()
-            node = BinOp(op, [node, next_factor])
 
-        return node
+            if op == "MULT":
+                factor *= next_factor
+            elif op == "DIV":
+                factor //= next_factor
+
+        return factor
 
 
     def parse_factor():
         if Parser.lexer.next.type == "INT":
-            node = IntVal(Parser.lexer.next.value)
+            resultado = Parser.lexer.next.value
             Parser.lexer.select_next()
-            return node
+            return resultado
 
         elif Parser.lexer.next.type in ("PLUS", "MINUS"):
             op = Parser.lexer.next.type
             Parser.lexer.select_next()
-            child = Parser.parse_factor()
-            return UnOp(op, [child])
 
+            if op == "PLUS":
+                return Parser.parse_factor()
+            elif op == "MINUS":
+                return -Parser.parse_factor()
         
         elif Parser.lexer.next.type == "OPEN_PAR":
             Parser.lexer.select_next()
@@ -122,7 +130,8 @@ class Parser():
             raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT, PLUS, MINUS or OPEN_PAR")
 
         
-    def run(code: str):
+
+    def run(code: str) -> int:
 
         Parser.lexer = Lexer(code, 0, None)
         Parser.lexer.select_next()
@@ -131,66 +140,6 @@ class Parser():
         if Parser.lexer.next.type != "EOF":
             raise Exception("[Parser] Unexpected token after expression: " + Parser.lexer.next.type)
         return resultado
-    
-class Node(ABC):
-    def __init__(self, value: int | str, children: list):
-        self.value = value
-        self.children = children
-
-    @abstractmethod
-    def evaluate(self):
-        pass
-
-
-class BinOp(Node):
-    def __init__(self, op: str, children: Node):
-        if len(children) != 2:
-            raise Exception("[Semantic] BinOp must have exactly 2 children")
-        super().__init__(op, children)
-    
-    def evaluate(self):
-        op = self.value
-        left_value = self.children[0].evaluate()
-        right_value = self.children[1].evaluate()
-
-        if op == "PLUS":
-             return left_value + right_value
-        elif op == "MINUS":
-            return left_value - right_value
-        elif op == "MULT":
-            return left_value * right_value
-        elif op == "DIV":
-            return left_value // right_value
-        else:
-            raise Exception("[Semantic] Invalid operator: " + op)
-    
-class UnOp(Node):
-    def __init__(self, op: str, children: Node):
-        if len(children) != 1:
-            raise Exception("[Semantic] UnOp must have exactly 1 child")
-        super().__init__(op, children)
-
-    def evaluate(self):
-        op = self.value
-        central_value = self.children[0].evaluate()
-
-        if op == "PLUS":
-            return central_value
-        elif op == "MINUS":
-            return -central_value
-        else:
-            raise Exception("[Semantic] Invalid operator: " + op)
-
-    
-class IntVal(Node):
-    def __init__(self, value: int):
-        super().__init__(value, [])
-    
-    def evaluate(self):
-        return int(self.value)
-
 
 if __name__ == "__main__":
-    ast_root = Parser.run(sys.argv[1])
-    resultado_final = ast_root.evaluate()
-    print(resultado_final)
+    print(Parser.run(sys.argv[1]))
