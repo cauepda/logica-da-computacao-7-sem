@@ -16,7 +16,7 @@ class Token():
         self.value = value
 
 
-class Prepro():
+class PrePro():
     def filter(codigo_fonte):
         codigo_limpo = re.sub(r'--.*\n', '\n', codigo_fonte)
         return codigo_limpo
@@ -30,13 +30,13 @@ class SymbolTable():
     def __init__(self, table):
         self.table = table
 
-    def getter(self, variable: Variable):
+    def get_value(self, variable: Variable):
         if variable in self.table.keys():
             return self.table[variable]
         else:
             raise Exception("[Semantic] Variable not defined: " + variable)
 
-    def setter(self, variable: Variable, value):
+    def set_value(self, variable: Variable, value):
         self.table[variable] = value
 
 
@@ -283,15 +283,15 @@ class IntVal(Node):
     
 
 class Identifier(Node):
-    def __init__(self, value: str):
-        super().__init__(value, [])
+    def __init__(self, value: str, children = []):
+        super().__init__(value, children)
 
     def evaluate(self, st: SymbolTable):
-        return st.getter(self.value)
+        return st.get_value(self.value)
     
 
 class Print(Node):
-    def __init__(self, children):
+    def __init__(self, children, value = None):
         super().__init__(None, [children])
 
     def evaluate(self, st: SymbolTable):
@@ -300,17 +300,17 @@ class Print(Node):
 
 
 class Assignment(Node):
-    def __init__(self, children):
+    def __init__(self, children, value = None):
         super().__init__(None, children)
 
     def evaluate(self, st: SymbolTable):
         nome_da_variavel = self.children[0].value
         resultado_da_expressao = self.children[1].evaluate(st)
-        st.setter(nome_da_variavel, resultado_da_expressao)
+        st.set_value(nome_da_variavel, resultado_da_expressao)
 
 
 class Block(Node):
-    def __init__(self, children):
+    def __init__(self, children, value = None):
         super().__init__(None, children)
 
     def evaluate(self, st: SymbolTable):
@@ -319,8 +319,8 @@ class Block(Node):
 
 
 class NoOp(Node):
-    def __init__(self):
-        super().__init__(None, None)
+    def __init__(self, value = None, children = None):
+        super().__init__(value, children)
 
     def evaluate(self, st: SymbolTable):
         pass
@@ -331,7 +331,7 @@ if __name__ == "__main__":
     with open(fil_name, "r") as f:
         code = f.read()
         code += "\n"
-    codigo_limpo = Prepro.filter(code)
+    codigo_limpo = PrePro.filter(code)
 
     dictionary = {}
     st = SymbolTable(dictionary)
