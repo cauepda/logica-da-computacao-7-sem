@@ -314,6 +314,13 @@ class Parser():
             Parser.lexer.select_next()
             node = While([cond, body])
 
+        elif Parser.lexer.next.type == "OPEN_BRA":
+            Parser.lexer.select_next()
+            node = Parser.parse_block()
+            if Parser.lexer.next.type != "CLOSE_BRA":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected end")
+            Parser.lexer.select_next()
+
         else:
             node = NoOp()
 
