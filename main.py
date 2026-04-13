@@ -217,11 +217,9 @@ class Parser():
         else:
             raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT, PLUS, MINUS, NOT, OPEN_PAR, IDEN or READ")
 
-    def parse_block(terminators):
+    def parse_block():
         statements = []
-        while Parser.lexer.next.type not in terminators:
-            if Parser.lexer.next.type == "EOF":
-                raise Exception("[Parser] Unexpected EOF inside block")
+        while Parser.lexer.next.type not in ("ELSE", "CLOSE_BRA", "EOF"):
             statements.append(Parser.parse_statement())
         return Block(statements)
 
@@ -276,11 +274,11 @@ class Parser():
                 raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected then")
             Parser.lexer.select_next()
 
-            then_block = Parser.parse_block(("ELSE", "CLOSE_BRA"))
+            then_block = Parser.parse_block()
 
             if Parser.lexer.next.type == "ELSE":
                 Parser.lexer.select_next()
-                else_block = Parser.parse_block(("CLOSE_BRA",))
+                else_block = Parser.parse_block()
 
                 if Parser.lexer.next.type != "CLOSE_BRA":
                     raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected end")
@@ -309,7 +307,7 @@ class Parser():
                 raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected do")
             Parser.lexer.select_next()
 
-            body = Parser.parse_block(("CLOSE_BRA",))
+            body = Parser.parse_block()
 
             if Parser.lexer.next.type != "CLOSE_BRA":
                 raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected end")
