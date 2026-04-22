@@ -11,16 +11,32 @@ This repository is monitored by Compiler Tester for automatic compilation status
 ```ebnf
 
 PROGRAM = { STATEMENT } ;
-STATEMENT = ((IDENTIFIER, "=", BOOLEXPRESSION) | (IF, "(", BOOLEXPRESSION, ")", STATEMENT, ("ELSE", STATEMENT) | ε) | (PRINT, "(", BOOLEXPRESSION, ")") | (WHILE, "(", BOOLEXPRESSION, ")", STATEMENT) | ε), EOL ;
-BOOLEXPRESSION = BOOLTERM, { "||", BOOLTERM } ;
-BOOLTERM = RELEXPRESSION, { "&&", RELEXPRESSION } ;
-RELEXPRESSION = EXPRESSION, ("==" | "<" | ">"), EXPRESSION ;
+STATEMENT = (ASSIGNMENT | VARDEC | PRINT | IF | WHILE | BLOCK | ε), EOL ;
+ASSIGNMENT = IDENTIFIER, "=", BOOLEXPRESSION ;
+VARDEC = "local", IDENTIFIER, TYPE, [ "=", BOOLEXPRESSION ] ;
+PRINT = "print", "(", BOOLEXPRESSION, ")" ;
+IF = "if", "(", BOOLEXPRESSION, ")", "then", BLOCK, [ "else", BLOCK ], "end" ;
+WHILE = "while", "(", BOOLEXPRESSION, ")", "do", BLOCK, "end" ;
+BLOCK = "do", { STATEMENT }, "end" ;
+BOOLEXPRESSION = BOOLTERM, { "or", BOOLTERM } ;
+BOOLTERM = RELEXPRESSION, { "and", RELEXPRESSION } ;
+RELEXPRESSION = EXPRESSION, [ ("==" | "<" | ">"), EXPRESSION ] ;
 EXPRESSION = TERM, { ("+" | "-"), TERM } ;
 TERM = FACTOR, { ("*" | "/"), FACTOR } ;
-FACTOR = ("+" | "-"), FACTOR | "(", BOOLEXPRESSION, ")" | NUMBER | READ, "(", ")" ;
-NUMBER = DIGIT, {DIGIT} ;
+FACTOR = ("+" | "-" | "not"), FACTOR
+       | "(", BOOLEXPRESSION, ")"
+       | NUMBER
+       | STRING
+       | BOOL
+       | IDENTIFIER
+       | "read", "(", ")" ;
+TYPE = "number" | "string" | "boolean" ;
+BOOL = "true" | "false" ;
+STRING = '"', { CHAR }, '"' ;
+NUMBER = DIGIT, { DIGIT } ;
 DIGIT = 0 | 1 | ... | 9 ;
-IDENTIFIER = LETTER, {LETTER | DIGIT | "_"} ;
+IDENTIFIER = LETTER, { LETTER | DIGIT | "_" } ;
 LETTER = a | b | ... | z | A | B | ... | Z ;
+CHAR = qualquer caractere exceto '"' ;
 
 ```
