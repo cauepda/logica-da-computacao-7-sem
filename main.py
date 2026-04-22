@@ -139,6 +139,12 @@ class Lexer():
                     self.next = Token("GT", '>')
                 elif caracter == '\n':
                     self.next = Token("END", '\n')
+                elif caracter == '.':
+                    if self.position + 1 < len(self.source) and self.source[self.position + 1] == '.':
+                        self.next = Token("CONCAT", '..')
+                        self.position += 2
+                        return
+                    raise Exception("[Lexer] Invalid character: " + caracter)
                 else:
                     raise Exception("[Lexer] Invalid character: " + caracter)
                 self.position += 1
@@ -183,7 +189,7 @@ class Parser():
     def parse_expression():
         node = Parser.parse_term()
 
-        while Parser.lexer.next.type in ("PLUS", "MINUS"):
+        while Parser.lexer.next.type in ("PLUS", "MINUS", "CONCAT"):
             op = Parser.lexer.next.type
             Parser.lexer.select_next()
 
@@ -440,6 +446,24 @@ class BinOp(Node):
             if right.value == 0:
                 raise Exception("[Semantic] Division by zero")
             return Variable(left.value // right.value, "number")
+        elif value == "CONCAT":
+            if left.type == "string":
+                left_str = left.value
+            elif left.type == "number":
+                left_str = str(left.value)
+            elif left.type == "boolean":
+                left_str = "true" if left.value else "false"
+            else:
+                raise Exception("[Semantic] CONCAT invalid left operand type: " + left.type)
+            if right.type == "string":
+                right_str = right.value
+            elif right.type == "number":
+                right_str = str(right.value)
+            elif right.type == "boolean":
+                right_str = "true" if right.value else "false"
+            else:
+                raise Exception("[Semantic] CONCAT invalid right operand type: " + right.type)
+            return Variable(left_str + right_str, "string")
         elif value == "AND":
             if left.type != "boolean" or right.type != "boolean":
                 raise Exception("[Semantic] AND requires boolean operands, got " + left.type + " and " + right.type)
