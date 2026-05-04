@@ -444,11 +444,12 @@ class Parser():
         else:
             node = NoOp()
 
-        if Parser.lexer.next.type != "END":
-            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected END")
-        else:
+        # consome o END (newline) se tiver, ou aceita um terminador de bloco
+        if Parser.lexer.next.type == "END":
             Parser.lexer.select_next()
-            return node
+        elif Parser.lexer.next.type not in ("CLOSE_BRA", "EOF", "ELSE"):
+            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected END")
+        return node
 
     def run(code: str):
 
