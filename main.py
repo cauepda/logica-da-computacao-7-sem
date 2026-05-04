@@ -464,14 +464,14 @@ class Parser():
 class Node(ABC):
     id = 0
 
-    def newId():
+    def new_id():
         Node.id += 1
         return Node.id
 
     def __init__(self, value, children: list):
         self.value = value
         self.children = children
-        self.id = Node.newId()
+        self.id = Node.new_id()
 
     @abstractmethod
     def evaluate(self, st: SymbolTable):
