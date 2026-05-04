@@ -19,14 +19,16 @@ class PrePro():
 
 
 class Variable():
-    def __init__(self, value, type: str):
+    def __init__(self, value, type: str, shift=0):
         self.value = value
         self.type = type
+        self.shift = shift
 
 
 class SymbolTable():
     def __init__(self, table):
         self.table = table
+        self.shift_total = 0  # quantos bytes ja foram alocados na pilha
 
     def get_value(self, variable):
         if variable in self.table.keys():
@@ -40,12 +42,64 @@ class SymbolTable():
         variavel_existente = self.table[variable]
         if variavel_existente.type != value.type:
             raise Exception("[Semantic] Type mismatch on assignment of " + variable + ": expected " + variavel_existente.type + ", got " + value.type)
+        # mantem o shift original que ja foi atribuido na criacao
+        value.shift = variavel_existente.shift
         self.table[variable] = value
 
     def create_variable(self, variable, value):
         if variable in self.table.keys():
             raise Exception("[Semantic] Variable already declared: " + variable)
+        self.shift_total += 4
+        value.shift = self.shift_total
         self.table[variable] = value
+
+
+class Code():
+    instructions = []
+
+    def append(code: str):
+        Code.instructions.append(code)
+
+    def dump(filename: str):
+        cabecalho = (
+            'section .data\n'
+            '  format_out: db "%d", 10, 0 ; format do printf\n'
+            '  format_in: db "%d", 0 ; format do scanf\n'
+            '  scan_int: dd 0 ; 32-bits integer\n'
+            '\n'
+            'section .text\n'
+            '\n'
+            '  extern printf ; usar _printf para Windows\n'
+            '  extern scanf ; usar _scanf para Windows\n'
+            '  ; extern _ExitProcess@4 ; usar para Windows\n'
+            '  global _start ; inicio do programa\n'
+            '\n'
+            '_start:\n'
+            '  push ebp ; guarda o EBP\n'
+            '  mov ebp, esp ; zera a pilha\n'
+            '\n'
+            '  ; aqui comeca o codigo gerado:\n'
+            '\n'
+        )
+        rodape = (
+            '\n'
+            '  ; aqui termina o codigo gerado\n'
+            '\n'
+            '  mov esp, ebp ; reestabelece a pilha\n'
+            '  pop ebp\n'
+            '\n'
+            '  ; chamada da interrupcao de saida (Linux)\n'
+            '  mov eax, 1\n'
+            '  xor ebx, ebx\n'
+            '  int 0x80\n'
+            '  ; Para Windows:\n'
+            '  ; push dword 0\n'
+            '  ; call _ExitProcess@4\n'
+        )
+        with open(filename, 'w') as file:
+            file.write(cabecalho)
+            file.write("\n".join(Code.instructions))
+            file.write(rodape)
 
 
 RESERVED = {
@@ -408,12 +462,22 @@ class Parser():
 
 
 class Node(ABC):
+    id = 0
+
+    def newId():
+        Node.id += 1
+        return Node.id
+
     def __init__(self, value, children: list):
         self.value = value
         self.children = children
+        self.id = Node.newId()
 
     @abstractmethod
     def evaluate(self, st: SymbolTable):
+        pass
+
+    def generate(self, st: SymbolTable):
         pass
 
 
@@ -487,6 +551,44 @@ class BinOp(Node):
         else:
             raise Exception("[Semantic] Invalid operator: " + value)
 
+    def generate(self, st: SymbolTable):
+        # avalia o lado direito primeiro e empilha
+        self.children[1].generate(st)
+        Code.append("  push eax")
+        # avalia o lado esquerdo (resultado em EAX)
+        self.children[0].generate(st)
+        Code.append("  pop ecx")
+
+        if self.value == "PLUS":
+            Code.append("  add eax, ecx")
+        elif self.value == "MINUS":
+            Code.append("  sub eax, ecx")
+        elif self.value == "MULT":
+            Code.append("  imul ecx")
+        elif self.value == "DIV":
+            Code.append("  cdq")
+            Code.append("  idiv ecx")
+        elif self.value == "AND":
+            Code.append("  and eax, ecx")
+        elif self.value == "OR":
+            Code.append("  or eax, ecx")
+        elif self.value == "EQ":
+            Code.append("  cmp eax, ecx")
+            Code.append("  mov eax, 0")
+            Code.append("  mov ecx, 1")
+            Code.append("  cmove eax, ecx")
+        elif self.value == "LT":
+            Code.append("  cmp eax, ecx")
+            Code.append("  mov eax, 0")
+            Code.append("  mov ecx, 1")
+            Code.append("  cmovl eax, ecx")
+        elif self.value == "GT":
+            Code.append("  cmp eax, ecx")
+            Code.append("  mov eax, 0")
+            Code.append("  mov ecx, 1")
+            Code.append("  cmovg eax, ecx")
+        # CONCAT nao gera codigo (strings)
+
 
 class UnOp(Node):
     def __init__(self, value: str, children):
@@ -513,6 +615,16 @@ class UnOp(Node):
         else:
             raise Exception("[Semantic] Invalid operator: " + value)
 
+    def generate(self, st: SymbolTable):
+        self.children[0].generate(st)
+        if self.value == "PLUS":
+            # nao precisa fazer nada
+            pass
+        elif self.value == "MINUS":
+            Code.append("  neg eax")
+        elif self.value == "NOT":
+            Code.append("  xor eax, 1")
+
 
 class IntVal(Node):
     def __init__(self, value: int, children):
@@ -520,6 +632,9 @@ class IntVal(Node):
 
     def evaluate(self, st: SymbolTable):
         return Variable(int(self.value), "number")
+
+    def generate(self, st: SymbolTable):
+        Code.append("  mov eax, " + str(self.value))
 
 
 class BoolVal(Node):
@@ -529,6 +644,10 @@ class BoolVal(Node):
     def evaluate(self, st: SymbolTable):
         return Variable(bool(self.value), "boolean")
 
+    def generate(self, st: SymbolTable):
+        valor_int = 1 if self.value else 0
+        Code.append("  mov eax, " + str(valor_int))
+
 
 class StringVal(Node):
     def __init__(self, value: str, children):
@@ -537,6 +656,10 @@ class StringVal(Node):
     def evaluate(self, st: SymbolTable):
         return Variable(str(self.value), "string")
 
+    def generate(self, st: SymbolTable):
+        # nao gera codigo para strings
+        pass
+
 
 class Identifier(Node):
     def __init__(self, value: str, children=[]):
@@ -544,6 +667,10 @@ class Identifier(Node):
 
     def evaluate(self, st: SymbolTable):
         return st.get_value(self.value)
+
+    def generate(self, st: SymbolTable):
+        var = st.get_value(self.value)
+        Code.append("  mov eax, [ebp-" + str(var.shift) + "] ; recupera " + self.value)
 
 
 class Print(Node):
@@ -560,6 +687,13 @@ class Print(Node):
         else:
             print(resultado.value)
 
+    def generate(self, st: SymbolTable):
+        self.children[0].generate(st)
+        Code.append("  push eax")
+        Code.append("  push format_out")
+        Code.append("  call printf")
+        Code.append("  add esp, 8")
+
 
 class Assignment(Node):
     def __init__(self, children, value=None):
@@ -569,6 +703,13 @@ class Assignment(Node):
         nome_da_variavel = self.children[0].value
         resultado_da_expressao = self.children[1].evaluate(st)
         st.set_value(nome_da_variavel, resultado_da_expressao)
+
+    def generate(self, st: SymbolTable):
+        nome_da_variavel = self.children[0].value
+        var = st.get_value(nome_da_variavel)
+        # gera o codigo da expressao primeiro (resultado em EAX)
+        self.children[1].generate(st)
+        Code.append("  mov [ebp-" + str(var.shift) + "], eax ; " + nome_da_variavel + " =")
 
 
 class VarDec(Node):
@@ -595,6 +736,30 @@ class VarDec(Node):
                 raise Exception("[Semantic] Unknown type: " + tipo_declarado)
             st.create_variable(nome_da_variavel, valor_padrao)
 
+    def generate(self, st: SymbolTable):
+        nome_da_variavel = self.children[0].value
+        tipo_declarado = self.value
+
+        # cria a variavel na tabela com valor padrao
+        if tipo_declarado == "number":
+            nova_var = Variable(0, "number")
+        elif tipo_declarado == "boolean":
+            nova_var = Variable(False, "boolean")
+        else:
+            nova_var = Variable("", "string")
+        st.create_variable(nome_da_variavel, nova_var)
+
+        # nao gera espaco na pilha pra string
+        if tipo_declarado == "string":
+            return
+
+        Code.append("  sub esp, 4 ; var " + nome_da_variavel + " [EBP-" + str(nova_var.shift) + "]")
+
+        # se tiver inicializacao, gera o codigo da expressao e atribui
+        if len(self.children) == 2:
+            self.children[1].generate(st)
+            Code.append("  mov [ebp-" + str(nova_var.shift) + "], eax ; " + nome_da_variavel + " =")
+
 
 class Block(Node):
     def __init__(self, children, value=None):
@@ -603,6 +768,10 @@ class Block(Node):
     def evaluate(self, st: SymbolTable):
         for child in self.children:
             child.evaluate(st)
+
+    def generate(self, st: SymbolTable):
+        for child in self.children:
+            child.generate(st)
 
 
 class If(Node):
@@ -619,6 +788,25 @@ class If(Node):
             if len(self.children) == 3:
                 self.children[2].evaluate(st)
 
+    def generate(self, st: SymbolTable):
+        meu_id = str(self.id)
+        # avalia a condicao
+        self.children[0].generate(st)
+        Code.append("  cmp eax, 0")
+
+        if len(self.children) == 3:
+            # tem else
+            Code.append("  je else_" + meu_id)
+            self.children[1].generate(st)
+            Code.append("  jmp end_" + meu_id)
+            Code.append("else_" + meu_id + ":")
+            self.children[2].generate(st)
+            Code.append("end_" + meu_id + ":")
+        else:
+            Code.append("  je end_" + meu_id)
+            self.children[1].generate(st)
+            Code.append("end_" + meu_id + ":")
+
 
 class While(Node):
     def __init__(self, children, value=None):
@@ -634,6 +822,18 @@ class While(Node):
             if cond.type != "boolean":
                 raise Exception("[Semantic] WHILE condition must be boolean, got " + cond.type)
 
+    def generate(self, st: SymbolTable):
+        meu_id = str(self.id)
+        Code.append("loop_" + meu_id + ":")
+        # avalia a condicao
+        self.children[0].generate(st)
+        Code.append("  cmp eax, 0")
+        Code.append("  je exit_" + meu_id)
+        # corpo do loop
+        self.children[1].generate(st)
+        Code.append("  jmp loop_" + meu_id)
+        Code.append("exit_" + meu_id + ":")
+
 
 class Read(Node):
     def __init__(self, value=None, children=None):
@@ -642,12 +842,22 @@ class Read(Node):
     def evaluate(self, st: SymbolTable):
         return Variable(int(input()), "number")
 
+    def generate(self, st: SymbolTable):
+        Code.append("  push scan_int")
+        Code.append("  push format_in")
+        Code.append("  call scanf")
+        Code.append("  add esp, 8")
+        Code.append("  mov eax, dword [scan_int]")
+
 
 class NoOp(Node):
     def __init__(self, value=None, children=None):
         super().__init__(value, children)
 
     def evaluate(self, st: SymbolTable):
+        pass
+
+    def generate(self, st: SymbolTable):
         pass
 
 
@@ -661,4 +871,8 @@ if __name__ == "__main__":
     dictionary = {}
     st = SymbolTable(dictionary)
     ast_root = Parser.run(codigo_limpo)
-    resultado = ast_root.evaluate(st)
+    ast_root.generate(st)
+
+    # nome do arquivo de saida usa o mesmo prefixo
+    nome_saida = fil_name.rsplit(".", 1)[0] + ".asm"
+    Code.dump(nome_saida)
