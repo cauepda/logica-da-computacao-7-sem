@@ -21,7 +21,7 @@ BLOCK = "do", { STATEMENT }, "end" ;
 BOOLEXPRESSION = BOOLTERM, { "or", BOOLTERM } ;
 BOOLTERM = RELEXPRESSION, { "and", RELEXPRESSION } ;
 RELEXPRESSION = EXPRESSION, [ ("==" | "<" | ">"), EXPRESSION ] ;
-EXPRESSION = TERM, { ("+" | "-"), TERM } ;
+EXPRESSION = TERM, { ("+" | "-" | ".."), TERM } ;
 TERM = FACTOR, { ("*" | "/"), FACTOR } ;
 FACTOR = ("+" | "-" | "not"), FACTOR
        | "(", BOOLEXPRESSION, ")"
