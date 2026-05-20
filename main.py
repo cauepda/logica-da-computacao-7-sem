@@ -434,6 +434,8 @@ class Parser():
         while Parser.lexer.next.type != "EOF":
             if Parser.lexer.next.type == "FUNC":
                 statements.append(Parser.parse_func_declaration())
+            elif Parser.lexer.next.type in ("CLOSE_BRA", "ELSE"):
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected EOF")
             else:
                 statements.append(Parser.parse_statement())
 
