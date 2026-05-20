@@ -27,6 +27,8 @@ class SymbolTable():
         self.table = table
         self.shift_total = 0
         self.parent = parent
+        self.is_function_scope = False
+        self.return_value = None
 
     def get_value(self, variable):
         if variable in self.table:
@@ -212,9 +214,13 @@ class Lexer():
         self.next = Token("EOF", "")
 
 
-class ReturnValue:
-    def __init__(self, value):
-        self.value = value
+def _find_function_st(st):
+    cur = st
+    while cur is not None:
+        if cur.is_function_scope:
+            return cur
+        cur = cur.parent
+    return None
 
 
 class Parser():
@@ -344,6 +350,25 @@ class Parser():
         while Parser.lexer.next.type not in ("ELSE", "CLOSE_BRA", "EOF"):
             statements.append(Parser.parse_statement())
         return Block(statements)
+
+    def parse_var_declaration():
+        Parser.lexer.select_next()  # consume VAR (local)
+
+        if Parser.lexer.next.type != "IDEN":
+            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected IDEN")
+        iden_node = Identifier(Parser.lexer.next.value)
+        Parser.lexer.select_next()
+
+        if Parser.lexer.next.type != "TYPE":
+            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected TYPE")
+        tipo_variavel = Parser.lexer.next.value
+        Parser.lexer.select_next()
+
+        if Parser.lexer.next.type == "ASSIGN":
+            Parser.lexer.select_next()
+            expr = Parser.parse_bool_expression()
+            return VarDec(tipo_variavel, [iden_node, expr])
+        return VarDec(tipo_variavel, [iden_node])
 
     def parse_func_declaration():
         Parser.lexer.select_next()  # consume FUNC
@@ -518,24 +543,7 @@ class Parser():
             Parser.lexer.select_next()
 
         elif Parser.lexer.next.type == "VAR":
-            Parser.lexer.select_next()
-
-            if Parser.lexer.next.type != "IDEN":
-                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected IDEN")
-            iden_node = Identifier(Parser.lexer.next.value)
-            Parser.lexer.select_next()
-
-            if Parser.lexer.next.type != "TYPE":
-                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected TYPE")
-            tipo_variavel = Parser.lexer.next.value
-            Parser.lexer.select_next()
-
-            if Parser.lexer.next.type == "ASSIGN":
-                Parser.lexer.select_next()
-                expr = Parser.parse_bool_expression()
-                node = VarDec(tipo_variavel, [iden_node, expr])
-            else:
-                node = VarDec(tipo_variavel, [iden_node])
+            node = Parser.parse_var_declaration()
 
         elif Parser.lexer.next.type == "RETURN":
             Parser.lexer.select_next()
@@ -859,15 +867,15 @@ class Block(Node):
         super().__init__(None, children)
 
     def evaluate(self, st: SymbolTable):
+        func_st = _find_function_st(st)
         for child in self.children:
             if isinstance(child, Block):
                 new_st = SymbolTable({}, parent=st)
-                result = child.evaluate(new_st)
+                child.evaluate(new_st)
             else:
-                result = child.evaluate(st)
-            if isinstance(result, ReturnValue):
-                return result
-        return None
+                child.evaluate(st)
+            if func_st is not None and func_st.return_value is not None:
+                return
 
     def generate(self, st: SymbolTable):
         for child in self.children:
@@ -883,14 +891,10 @@ class If(Node):
         if cond.type != "boolean":
             raise Exception("[Semantic] IF condition must be boolean, got " + cond.type)
         if cond.value:
-            result = self.children[1].evaluate(st)
-            if isinstance(result, ReturnValue):
-                return result
+            self.children[1].evaluate(st)
         else:
             if len(self.children) == 3:
-                result = self.children[2].evaluate(st)
-                if isinstance(result, ReturnValue):
-                    return result
+                self.children[2].evaluate(st)
 
     def generate(self, st: SymbolTable):
         meu_id = str(self.id)
@@ -918,10 +922,11 @@ class While(Node):
         cond = self.children[0].evaluate(st)
         if cond.type != "boolean":
             raise Exception("[Semantic] WHILE condition must be boolean, got " + cond.type)
+        func_st = _find_function_st(st)
         while cond.value:
-            result = self.children[1].evaluate(st)
-            if isinstance(result, ReturnValue):
-                return result
+            self.children[1].evaluate(st)
+            if func_st is not None and func_st.return_value is not None:
+                return
             cond = self.children[0].evaluate(st)
             if cond.type != "boolean":
                 raise Exception("[Semantic] WHILE condition must be boolean, got " + cond.type)
@@ -968,7 +973,11 @@ class Return(Node):
         super().__init__(None, children)
 
     def evaluate(self, st: SymbolTable):
-        return ReturnValue(self.children[0].evaluate(st))
+        value = self.children[0].evaluate(st)
+        func_st = _find_function_st(st)
+        if func_st is None:
+            raise Exception("[Semantic] return outside of function")
+        func_st.return_value = value
 
     def generate(self, st: SymbolTable):
         pass
@@ -1011,6 +1020,7 @@ class FuncCall(Node):
             global_st = global_st.parent
 
         new_st = SymbolTable({}, parent=global_st)
+        new_st.is_function_scope = True
 
         # declara os argumentos na nova SymbolTable com os valores passados
         for i, arg_dec in enumerate(arg_decs):
@@ -1022,15 +1032,15 @@ class FuncCall(Node):
             new_st.create_variable(arg_name, arg_val)
 
         body = func_dec.children[-1]
-        result = body.evaluate(new_st)
+        body.evaluate(new_st)
 
         expected_return = func_dec.value  # tipo de retorno declarado
-        if isinstance(result, ReturnValue):
+        if new_st.return_value is not None:
             if not expected_return:
                 raise Exception("[Semantic] Function " + self.value + " should not return a value")
-            if result.value.type != expected_return:
-                raise Exception("[Semantic] Return type mismatch in " + self.value + ": expected " + expected_return + ", got " + result.value.type)
-            return result.value
+            if new_st.return_value.type != expected_return:
+                raise Exception("[Semantic] Return type mismatch in " + self.value + ": expected " + expected_return + ", got " + new_st.return_value.type)
+            return new_st.return_value
         return None
 
     def generate(self, st: SymbolTable):
