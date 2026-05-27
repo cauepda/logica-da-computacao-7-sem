@@ -38,7 +38,9 @@ class SymbolTable():
         if variable not in self.table.keys():
             raise Exception("[Semantic] Variable not declared: " + variable)
         variavel_existente = self.table[variable]
-        if variavel_existente.type != value.type:
+        if variavel_existente.type == "float" and value.type == "number":
+            value = Variable(float(value.value), "float")
+        elif variavel_existente.type != value.type:
             raise Exception("[Semantic] Type mismatch on assignment of " + variable + ": expected " + variavel_existente.type + ", got " + value.type)
         self.table[variable] = value
 
@@ -66,6 +68,7 @@ RESERVED = {
     "string": "TYPE",
     "number": "TYPE",
     "boolean": "TYPE",
+    "float": "TYPE",
 }
 
 
@@ -88,6 +91,14 @@ class Lexer():
                 while self.position < len(self.source) and self.source[self.position].isdigit():
                     num_str += self.source[self.position]
                     self.position += 1
+                if self.position < len(self.source) and self.source[self.position] == '.' and self.position + 1 < len(self.source) and self.source[self.position + 1].isdigit():
+                    num_str += '.'
+                    self.position += 1
+                    while self.position < len(self.source) and self.source[self.position].isdigit():
+                        num_str += self.source[self.position]
+                        self.position += 1
+                    self.next = Token("FLOAT", float(num_str))
+                    return
                 self.next = Token("INT", int(num_str))
                 return
 
@@ -217,6 +228,11 @@ class Parser():
             Parser.lexer.select_next()
             return node
 
+        elif Parser.lexer.next.type == "FLOAT":
+            node = FloatVal(Parser.lexer.next.value, [])
+            Parser.lexer.select_next()
+            return node
+
         elif Parser.lexer.next.type == "STR":
             node = StringVal(Parser.lexer.next.value, [])
             Parser.lexer.select_next()
@@ -236,6 +252,15 @@ class Parser():
 
         elif Parser.lexer.next.type == "OPEN_PAR":
             Parser.lexer.select_next()
+
+            if Parser.lexer.next.type == "TYPE":
+                tipo_cast = Parser.lexer.next.value
+                Parser.lexer.select_next()
+                if Parser.lexer.next.type != "CLOSE_PAR":
+                    raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected CLOSE_PAR after cast type")
+                Parser.lexer.select_next()
+                child = Parser.parse_factor()
+                return Cast(tipo_cast, [child])
 
             expr = Parser.parse_bool_expression()
 
@@ -261,7 +286,7 @@ class Parser():
             return Read()
 
         else:
-            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT, STR, BOOL, PLUS, MINUS, NOT, OPEN_PAR, IDEN or READ")
+            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT, FLOAT, STR, BOOL, PLUS, MINUS, NOT, OPEN_PAR, IDEN or READ")
 
     def parse_block():
         statements = []
@@ -429,35 +454,40 @@ class BinOp(Node):
         right = self.children[1].evaluate(st)
 
         if value == "PLUS":
-            if left.type != "number" or right.type != "number":
-                raise Exception("[Semantic] PLUS requires number operands, got " + left.type + " and " + right.type)
-            return Variable(left.value + right.value, "number")
+            if left.type not in ("number", "float") or right.type not in ("number", "float"):
+                raise Exception("[Semantic] PLUS requires numeric operands, got " + left.type + " and " + right.type)
+            resultado_tipo = "float" if (left.type == "float" or right.type == "float") else "number"
+            return Variable(left.value + right.value, resultado_tipo)
         elif value == "MINUS":
-            if left.type != "number" or right.type != "number":
-                raise Exception("[Semantic] MINUS requires number operands, got " + left.type + " and " + right.type)
-            return Variable(left.value - right.value, "number")
+            if left.type not in ("number", "float") or right.type not in ("number", "float"):
+                raise Exception("[Semantic] MINUS requires numeric operands, got " + left.type + " and " + right.type)
+            resultado_tipo = "float" if (left.type == "float" or right.type == "float") else "number"
+            return Variable(left.value - right.value, resultado_tipo)
         elif value == "MULT":
-            if left.type != "number" or right.type != "number":
-                raise Exception("[Semantic] MULT requires number operands, got " + left.type + " and " + right.type)
-            return Variable(left.value * right.value, "number")
+            if left.type not in ("number", "float") or right.type not in ("number", "float"):
+                raise Exception("[Semantic] MULT requires numeric operands, got " + left.type + " and " + right.type)
+            resultado_tipo = "float" if (left.type == "float" or right.type == "float") else "number"
+            return Variable(left.value * right.value, resultado_tipo)
         elif value == "DIV":
-            if left.type != "number" or right.type != "number":
-                raise Exception("[Semantic] DIV requires number operands, got " + left.type + " and " + right.type)
+            if left.type not in ("number", "float") or right.type not in ("number", "float"):
+                raise Exception("[Semantic] DIV requires numeric operands, got " + left.type + " and " + right.type)
             if right.value == 0:
                 raise Exception("[Semantic] Division by zero")
+            if left.type == "float" or right.type == "float":
+                return Variable(left.value / right.value, "float")
             return Variable(left.value // right.value, "number")
         elif value == "CONCAT":
-            if left.type == "string":
+            if left.type in ("string",):
                 left_str = left.value
-            elif left.type == "number":
+            elif left.type in ("number", "float"):
                 left_str = str(left.value)
             elif left.type == "boolean":
                 left_str = "true" if left.value else "false"
             else:
                 raise Exception("[Semantic] CONCAT invalid left operand type: " + left.type)
-            if right.type == "string":
+            if right.type in ("string",):
                 right_str = right.value
-            elif right.type == "number":
+            elif right.type in ("number", "float"):
                 right_str = str(right.value)
             elif right.type == "boolean":
                 right_str = "true" if right.value else "false"
@@ -499,13 +529,13 @@ class UnOp(Node):
         central = self.children[0].evaluate(st)
 
         if value == "PLUS":
-            if central.type != "number":
-                raise Exception("[Semantic] Unary PLUS requires a number operand, got " + central.type)
-            return Variable(central.value, "number")
+            if central.type not in ("number", "float"):
+                raise Exception("[Semantic] Unary PLUS requires a numeric operand, got " + central.type)
+            return Variable(central.value, central.type)
         elif value == "MINUS":
-            if central.type != "number":
-                raise Exception("[Semantic] Unary MINUS requires a number operand, got " + central.type)
-            return Variable(-central.value, "number")
+            if central.type not in ("number", "float"):
+                raise Exception("[Semantic] Unary MINUS requires a numeric operand, got " + central.type)
+            return Variable(-central.value, central.type)
         elif value == "NOT":
             if central.type != "boolean":
                 raise Exception("[Semantic] NOT requires a boolean operand, got " + central.type)
@@ -520,6 +550,47 @@ class IntVal(Node):
 
     def evaluate(self, st: SymbolTable):
         return Variable(int(self.value), "number")
+
+
+class FloatVal(Node):
+    def __init__(self, value: float, children):
+        super().__init__(value, [])
+
+    def evaluate(self, st: SymbolTable):
+        return Variable(float(self.value), "float")
+
+
+class Cast(Node):
+    def __init__(self, value: str, children):
+        super().__init__(value, children)
+
+    def evaluate(self, st: SymbolTable):
+        target_type = self.value
+        operando = self.children[0].evaluate(st)
+        if target_type == "number":
+            if operando.type == "float":
+                return Variable(int(round(operando.value)), "number")
+            if operando.type == "number":
+                return Variable(operando.value, "number")
+            raise Exception("[Semantic] Cannot cast " + operando.type + " to number")
+        elif target_type == "float":
+            if operando.type in ("number", "float"):
+                return Variable(float(operando.value), "float")
+            raise Exception("[Semantic] Cannot cast " + operando.type + " to float")
+        elif target_type == "string":
+            if operando.type in ("string",):
+                return Variable(operando.value, "string")
+            if operando.type in ("number", "float"):
+                return Variable(str(operando.value), "string")
+            if operando.type == "boolean":
+                return Variable("true" if operando.value else "false", "string")
+            raise Exception("[Semantic] Cannot cast " + operando.type + " to string")
+        elif target_type == "boolean":
+            if operando.type == "boolean":
+                return Variable(operando.value, "boolean")
+            raise Exception("[Semantic] Cannot cast " + operando.type + " to boolean")
+        else:
+            raise Exception("[Semantic] Unknown cast type: " + target_type)
 
 
 class BoolVal(Node):
@@ -581,12 +652,16 @@ class VarDec(Node):
 
         if len(self.children) == 2:
             resultado = self.children[1].evaluate(st)
-            if resultado.type != tipo_declarado:
+            if tipo_declarado == "float" and resultado.type == "number":
+                resultado = Variable(float(resultado.value), "float")
+            elif resultado.type != tipo_declarado:
                 raise Exception("[Semantic] Type mismatch on declaration of " + nome_da_variavel + ": expected " + tipo_declarado + ", got " + resultado.type)
             st.create_variable(nome_da_variavel, resultado)
         else:
             if tipo_declarado == "number":
                 valor_padrao = Variable(0, "number")
+            elif tipo_declarado == "float":
+                valor_padrao = Variable(0.0, "float")
             elif tipo_declarado == "string":
                 valor_padrao = Variable("", "string")
             elif tipo_declarado == "boolean":
