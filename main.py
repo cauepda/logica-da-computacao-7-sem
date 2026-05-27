@@ -49,6 +49,7 @@ RESERVED = {
     "and": "AND",
     "or": "OR",
     "not": "NOT",
+    "for": "FOR",
 }
 
 
@@ -98,6 +99,8 @@ class Lexer():
                     self.next = Token("OPEN_PAR", '(')
                 elif caracter == ')':
                     self.next = Token("CLOSE_PAR", ')')
+                elif caracter == ',':
+                    self.next = Token("COMMA", ',')
                 elif caracter == '=':
                     if self.position + 1 < len(self.source) and self.source[self.position + 1] == '=':
                         self.next = Token("EQ", '==')
@@ -214,6 +217,22 @@ class Parser():
             Parser.lexer.select_next()
             return Read()
 
+        elif Parser.lexer.next.type == "IF":
+            Parser.lexer.select_next()
+            cond = Parser.parse_bool_expression()
+            if Parser.lexer.next.type != "OPEN_IF_BRA":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected then")
+            Parser.lexer.select_next()
+            then_expr = Parser.parse_bool_expression()
+            if Parser.lexer.next.type != "ELSE":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected else")
+            Parser.lexer.select_next()
+            else_expr = Parser.parse_bool_expression()
+            if Parser.lexer.next.type != "CLOSE_BRA":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected end")
+            Parser.lexer.select_next()
+            return IfExpr([cond, then_expr, else_expr])
+
         else:
             raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT, PLUS, MINUS, NOT, OPEN_PAR, IDEN or READ")
 
@@ -313,6 +332,29 @@ class Parser():
                 raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected end")
             Parser.lexer.select_next()
             node = While([cond, body])
+
+        elif Parser.lexer.next.type == "FOR":
+            Parser.lexer.select_next()
+            if Parser.lexer.next.type != "IDEN":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected IDEN")
+            iden_node = Identifier(Parser.lexer.next.value)
+            Parser.lexer.select_next()
+            if Parser.lexer.next.type != "ASSIGN":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected =")
+            Parser.lexer.select_next()
+            start_expr = Parser.parse_expression()
+            if Parser.lexer.next.type != "COMMA":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected ,")
+            Parser.lexer.select_next()
+            end_expr = Parser.parse_expression()
+            if Parser.lexer.next.type != "OPEN_BRA":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected do")
+            Parser.lexer.select_next()
+            body = Parser.parse_block()
+            if Parser.lexer.next.type != "CLOSE_BRA":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected end")
+            Parser.lexer.select_next()
+            node = For([iden_node, start_expr, end_expr, body])
 
         elif Parser.lexer.next.type == "OPEN_BRA":
             Parser.lexer.select_next()
@@ -488,6 +530,33 @@ class While(Node):
     def evaluate(self, st: SymbolTable):
         while self.children[0].evaluate(st) != 0:
             self.children[1].evaluate(st)
+
+
+class For(Node):
+    def __init__(self, children, value=None):
+        super().__init__(None, children)
+
+    def evaluate(self, st: SymbolTable):
+        nome_var = self.children[0].value
+        valor_inicial = self.children[1].evaluate(st)
+        valor_final = self.children[2].evaluate(st)
+        body = self.children[3]
+        st.set_value(nome_var, valor_inicial)
+        while st.get_value(nome_var) <= valor_final:
+            body.evaluate(st)
+            st.set_value(nome_var, st.get_value(nome_var) + 1)
+
+
+class IfExpr(Node):
+    def __init__(self, children, value=None):
+        super().__init__(None, children)
+
+    def evaluate(self, st: SymbolTable):
+        cond = self.children[0].evaluate(st)
+        if cond != 0:
+            return self.children[1].evaluate(st)
+        else:
+            return self.children[2].evaluate(st)
 
 
 class Read(Node):
