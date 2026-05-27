@@ -52,6 +52,10 @@ class Lexer():
                 elif caracter == '-':
                     self.next = Token("MINUS", '-')
                 elif caracter == '*':
+                    if self.position + 1 < len(self.source) and self.source[self.position + 1] == '*':
+                        self.next = Token("POWER", '**')
+                        self.position += 2
+                        return
                     self.next = Token("MULT", '*')
                 elif caracter == '/':
                     self.next = Token("DIV", '/')
@@ -102,12 +106,7 @@ class Parser():
 
 
     def parse_factor():
-        if Parser.lexer.next.type == "INT":
-            resultado = Parser.lexer.next.value
-            Parser.lexer.select_next()
-            return resultado
-
-        elif Parser.lexer.next.type in ("PLUS", "MINUS"):
+        if Parser.lexer.next.type in ("PLUS", "MINUS"):
             op = Parser.lexer.next.type
             Parser.lexer.select_next()
 
@@ -115,7 +114,24 @@ class Parser():
                 return Parser.parse_factor()
             elif op == "MINUS":
                 return -Parser.parse_factor()
-        
+
+        return Parser.parse_power()
+
+    def parse_power():
+        resultado = Parser.parse_atom()
+
+        if Parser.lexer.next.type == "POWER":
+            Parser.lexer.select_next()
+            resultado = resultado ** Parser.parse_factor()
+
+        return resultado
+
+    def parse_atom():
+        if Parser.lexer.next.type == "INT":
+            resultado = Parser.lexer.next.value
+            Parser.lexer.select_next()
+            return resultado
+
         elif Parser.lexer.next.type == "OPEN_PAR":
             Parser.lexer.select_next()
 
@@ -123,11 +139,11 @@ class Parser():
 
             if Parser.lexer.next.type != "CLOSE_PAR":
                 raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected CLOSE_PAR")
-                
+
             Parser.lexer.select_next()
             return expr
         else:
-            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT, PLUS, MINUS or OPEN_PAR")
+            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT or OPEN_PAR")
 
         
 
