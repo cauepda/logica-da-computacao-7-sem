@@ -19,25 +19,52 @@ class Token():
 class PrePro():
     def filter(codigo_fonte):
         codigo_limpo = re.sub(r'--.*\n', '\n', codigo_fonte)
-        return codigo_limpo
+
+        linhas = codigo_limpo.split('\n')
+        constantes = {}
+        linhas_processadas = []
+        for linha in linhas:
+            match = re.match(r'^\s*const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(\S+)\s*$', linha)
+            if match:
+                nome = match.group(1)
+                valor = match.group(2)
+                constantes[nome] = valor
+                linhas_processadas.append('')
+            else:
+                linhas_processadas.append(linha)
+
+        codigo_processado = '\n'.join(linhas_processadas)
+        for nome, valor in constantes.items():
+            codigo_processado = re.sub(r'\b' + re.escape(nome) + r'\b', valor, codigo_processado)
+        return codigo_processado
+
 
 class Variable():
     def __init__(self, value: int):
         self.value = value
-    
+
 
 class SymbolTable():
     def __init__(self, table):
         self.table = table
+        self.immutables = set()
 
-    def get_value(self, variable: Variable):
+    def get_value(self, variable):
         if variable in self.table.keys():
             return self.table[variable]
         else:
             raise Exception("[Semantic] Variable not defined: " + variable)
 
-    def set_value(self, variable: Variable, value):
+    def set_value(self, variable, value):
+        if variable in self.immutables:
+            raise Exception("[Semantic] Cannot change immutable variable: " + variable)
         self.table[variable] = value
+
+    def create_immutable(self, variable, value):
+        if variable in self.immutables:
+            raise Exception("[Semantic] Cannot change immutable variable: " + variable)
+        self.table[variable] = value
+        self.immutables.add(variable)
 
 
 class Lexer():
@@ -82,6 +109,8 @@ class Lexer():
                     self.position += 1
                 if variable_str == "print":
                     self.next = Token("PRINT", variable_str)
+                elif variable_str == "imut":
+                    self.next = Token("IMUT", variable_str)
                 else:
                     self.next = Token("IDEN", variable_str)
                 return
@@ -187,7 +216,18 @@ class Parser():
                 node = Assignment([indent_node, Parser.parse_expression()])
             else:
                 raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected ASSIGN")
-        
+
+        elif Parser.lexer.next.type == "IMUT":
+            Parser.lexer.select_next()
+            if Parser.lexer.next.type != "IDEN":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected IDEN")
+            indent_node = Identifier(Parser.lexer.next.value)
+            Parser.lexer.select_next()
+            if Parser.lexer.next.type != "ASSIGN":
+                raise Exception("[Parser] Immutable variable requires initial value: " + indent_node.value)
+            Parser.lexer.select_next()
+            node = ImmutAssignment([indent_node, Parser.parse_expression()])
+
         elif Parser.lexer.next.type == "PRINT":
             Parser.lexer.select_next()
 
@@ -307,6 +347,16 @@ class Assignment(Node):
         nome_da_variavel = self.children[0].value
         resultado_da_expressao = self.children[1].evaluate(st)
         st.set_value(nome_da_variavel, resultado_da_expressao)
+
+
+class ImmutAssignment(Node):
+    def __init__(self, children, value = None):
+        super().__init__(None, children)
+
+    def evaluate(self, st: SymbolTable):
+        nome_da_variavel = self.children[0].value
+        resultado_da_expressao = self.children[1].evaluate(st)
+        st.create_immutable(nome_da_variavel, resultado_da_expressao)
 
 
 class Block(Node):
