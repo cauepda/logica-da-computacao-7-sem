@@ -51,6 +51,8 @@ class Lexer():
                     self.next = Token("PLUS", '+')
                 elif caracter == '-':
                     self.next = Token("MINUS", '-')
+                elif caracter == '^':
+                    self.next = Token("XOR", '^')
                 else:
                     raise Exception("[Lexer] Invalid character: " + caracter)
                 self.position += 1
@@ -65,7 +67,7 @@ class Parser():
             raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT")
         resultado = Parser.lexer.next.value
         Parser.lexer.select_next()
-        while Parser.lexer.next.type in ("PLUS", "MINUS"):
+        while Parser.lexer.next.type in ("PLUS", "MINUS", "XOR"):
             op = Parser.lexer.next.type
             Parser.lexer.select_next()
             if Parser.lexer.next.type != "INT":
@@ -74,6 +76,8 @@ class Parser():
                 resultado += Parser.lexer.next.value
             elif op == "MINUS":
                 resultado -= Parser.lexer.next.value
+            elif op == "XOR":
+                resultado ^= Parser.lexer.next.value
             Parser.lexer.select_next()
         return resultado
 
