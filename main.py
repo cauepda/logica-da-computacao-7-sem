@@ -15,11 +15,12 @@ class PrePro():
 
 
 class Variable():
-    def __init__(self, value, type: str, shift=0, is_func=False):
+    def __init__(self, value, type: str, shift=0, is_func=False, fields=None):
         self.value = value
         self.type = type
         self.shift = shift
         self.is_func = is_func
+        self.fields = fields
 
 
 class SymbolTable():
@@ -126,6 +127,7 @@ RESERVED = {
     "boolean": "TYPE",
     "function": "FUNC",
     "return": "RETURN",
+    "struct": "STRUCT",
 }
 
 
@@ -206,7 +208,7 @@ class Lexer():
                         self.next = Token("CONCAT", '..')
                         self.position += 2
                         return
-                    raise Exception("[Lexer] Invalid character: " + caracter)
+                    self.next = Token("DOT", '.')
                 else:
                     raise Exception("[Lexer] Invalid character: " + caracter)
                 self.position += 1
@@ -330,6 +332,15 @@ class Parser():
                     raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected CLOSE_PAR")
                 Parser.lexer.select_next()
                 return FuncCall(iden_name, args)
+            if Parser.lexer.next.type == "DOT":
+                campos = []
+                while Parser.lexer.next.type == "DOT":
+                    Parser.lexer.select_next()
+                    if Parser.lexer.next.type != "IDEN":
+                        raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected field name")
+                    campos.append(Parser.lexer.next.value)
+                    Parser.lexer.select_next()
+                return MemberAccess(iden_name, [Identifier(iden_name)], campos)
             return Identifier(iden_name)
 
         elif Parser.lexer.next.type == "READ":
@@ -359,8 +370,8 @@ class Parser():
         iden_node = Identifier(Parser.lexer.next.value)
         Parser.lexer.select_next()
 
-        if Parser.lexer.next.type != "TYPE":
-            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected TYPE")
+        if Parser.lexer.next.type not in ("TYPE", "IDEN"):
+            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected TYPE or struct name")
         tipo_variavel = Parser.lexer.next.value
         Parser.lexer.select_next()
 
@@ -369,6 +380,33 @@ class Parser():
             expr = Parser.parse_bool_expression()
             return VarDec(tipo_variavel, [iden_node, expr])
         return VarDec(tipo_variavel, [iden_node])
+
+    def parse_struct_declaration():
+        Parser.lexer.select_next()  # consume STRUCT
+
+        if Parser.lexer.next.type != "IDEN":
+            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected struct name")
+        struct_name = Parser.lexer.next.value
+        Parser.lexer.select_next()
+
+        if Parser.lexer.next.type != "END":
+            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected newline after struct name")
+        Parser.lexer.select_next()
+
+        fields = []
+        while Parser.lexer.next.type != "CLOSE_BRA":
+            if Parser.lexer.next.type == "END":
+                Parser.lexer.select_next()
+                continue
+            if Parser.lexer.next.type != "VAR":
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected local")
+            field_dec = Parser.parse_var_declaration()
+            fields.append(field_dec)
+            if Parser.lexer.next.type == "END":
+                Parser.lexer.select_next()
+
+        Parser.lexer.select_next()  # consume END (the closing 'end')
+        return StructDec(struct_name, fields)
 
     def parse_func_declaration():
         Parser.lexer.select_next()  # consume FUNC
@@ -434,6 +472,8 @@ class Parser():
         while Parser.lexer.next.type != "EOF":
             if Parser.lexer.next.type == "FUNC":
                 statements.append(Parser.parse_func_declaration())
+            elif Parser.lexer.next.type == "STRUCT":
+                statements.append(Parser.parse_struct_declaration())
             elif Parser.lexer.next.type in ("CLOSE_BRA", "ELSE"):
                 raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected EOF")
             else:
@@ -447,7 +487,20 @@ class Parser():
             indent_node = Identifier(iden_name)
             Parser.lexer.select_next()
 
-            if Parser.lexer.next.type == "ASSIGN":
+            if Parser.lexer.next.type == "DOT":
+                campos = []
+                while Parser.lexer.next.type == "DOT":
+                    Parser.lexer.select_next()
+                    if Parser.lexer.next.type != "IDEN":
+                        raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected field name")
+                    campos.append(Parser.lexer.next.value)
+                    Parser.lexer.select_next()
+                if Parser.lexer.next.type != "ASSIGN":
+                    raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected =")
+                Parser.lexer.select_next()
+                expr = Parser.parse_bool_expression()
+                node = MemberAssignment(iden_name, [indent_node, expr], campos)
+            elif Parser.lexer.next.type == "ASSIGN":
                 Parser.lexer.select_next()
                 node = Assignment([indent_node, Parser.parse_bool_expression()])
             elif Parser.lexer.next.type == "OPEN_PAR":
@@ -463,7 +516,7 @@ class Parser():
                 Parser.lexer.select_next()
                 node = FuncCall(iden_name, args)
             else:
-                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected ASSIGN or OPEN_PAR")
+                raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected ASSIGN, OPEN_PAR or DOT")
 
         elif Parser.lexer.next.type == "PRINT":
             Parser.lexer.select_next()
@@ -839,7 +892,19 @@ class VarDec(Node):
             elif tipo_declarado == "boolean":
                 valor_padrao = Variable(False, "boolean", is_func=False)
             else:
-                raise Exception("[Semantic] Unknown type: " + tipo_declarado)
+                struct_var = None
+                cur = st
+                while cur is not None:
+                    if tipo_declarado in cur.table and cur.table[tipo_declarado].type == "struct_def":
+                        struct_var = cur.table[tipo_declarado]
+                        break
+                    cur = cur.parent
+                if struct_var is None:
+                    raise Exception("[Semantic] Unknown type: " + tipo_declarado)
+                fields = {}
+                for field_dec in struct_var.value:
+                    fields[field_dec.children[0].value] = StructDec.default_for(field_dec.value, st)
+                valor_padrao = Variable(None, tipo_declarado, is_func=False, fields=fields)
             st.create_variable(nome_da_variavel, valor_padrao)
 
     def generate(self, st: SymbolTable):
@@ -932,6 +997,75 @@ class While(Node):
             cond = self.children[0].evaluate(st)
             if cond.type != "boolean":
                 raise Exception("[Semantic] WHILE condition must be boolean, got " + cond.type)
+
+
+class StructDec(Node):
+    def __init__(self, value: str, children):
+        super().__init__(value, children)
+
+    def evaluate(self, st: SymbolTable):
+        global_st = st
+        while global_st.parent is not None:
+            global_st = global_st.parent
+        struct_var = Variable(self.children, "struct_def")
+        global_st.table[self.value] = struct_var
+
+    @staticmethod
+    def default_for(tipo: str, st):
+        if tipo == "number":
+            return Variable(0, "number")
+        if tipo == "string":
+            return Variable("", "string")
+        if tipo == "boolean":
+            return Variable(False, "boolean")
+        struct_var = None
+        cur = st
+        while cur is not None:
+            if tipo in cur.table and cur.table[tipo].type == "struct_def":
+                struct_var = cur.table[tipo]
+                break
+            cur = cur.parent
+        if struct_var is None:
+            raise Exception("[Semantic] Unknown field type: " + tipo)
+        fields = {}
+        for field_dec in struct_var.value:
+            fields[field_dec.children[0].value] = StructDec.default_for(field_dec.value, st)
+        return Variable(None, tipo, fields=fields)
+
+
+class MemberAccess(Node):
+    def __init__(self, value: str, children, campos):
+        super().__init__(value, children)
+        self.campos = campos
+
+    def evaluate(self, st: SymbolTable):
+        var = st.get_value(self.value)
+        for campo in self.campos:
+            if var.fields is None or campo not in var.fields:
+                raise Exception("[Semantic] Field not found: " + campo)
+            var = var.fields[campo]
+        return var
+
+
+class MemberAssignment(Node):
+    def __init__(self, value: str, children, campos):
+        super().__init__(value, children)
+        self.campos = campos
+
+    def evaluate(self, st: SymbolTable):
+        var = st.get_value(self.value)
+        for campo in self.campos[:-1]:
+            if var.fields is None or campo not in var.fields:
+                raise Exception("[Semantic] Field not found: " + campo)
+            var = var.fields[campo]
+        ultimo_campo = self.campos[-1]
+        if var.fields is None or ultimo_campo not in var.fields:
+            raise Exception("[Semantic] Field not found: " + ultimo_campo)
+        novo_valor = self.children[1].evaluate(st)
+        campo_atual = var.fields[ultimo_campo]
+        if campo_atual.type != novo_valor.type:
+            raise Exception("[Semantic] Type mismatch on assignment of field " + ultimo_campo + ": expected " + campo_atual.type + ", got " + novo_valor.type)
+        var.fields[ultimo_campo] = novo_valor
 
     def generate(self, st: SymbolTable):
         meu_id = str(self.id)
