@@ -61,6 +61,8 @@ class Lexer():
                     self.next = Token("OPEN_PAR", '(')
                 elif caracter == ')':
                     self.next = Token("CLOSE_PAR", ')')
+                elif caracter == '!':
+                    self.next = Token("FACT", '!')
                 else:
                     raise Exception("[Lexer] Invalid character: " + caracter)
                 self.position += 1
@@ -96,18 +98,29 @@ class Parser():
 
 
     def parse_factor():
-        if Parser.lexer.next.type == "INT":
-            node = IntVal(Parser.lexer.next.value, [])
-            Parser.lexer.select_next()
-            return node
-
-        elif Parser.lexer.next.type in ("PLUS", "MINUS"):
+        if Parser.lexer.next.type in ("PLUS", "MINUS"):
             op = Parser.lexer.next.type
             Parser.lexer.select_next()
             child = Parser.parse_factor()
             return UnOp(op, [child])
 
-        
+        return Parser.parse_factor_post()
+
+    def parse_factor_post():
+        node = Parser.parse_atom()
+
+        while Parser.lexer.next.type == "FACT":
+            Parser.lexer.select_next()
+            node = UnOp("FACT", [node])
+
+        return node
+
+    def parse_atom():
+        if Parser.lexer.next.type == "INT":
+            node = IntVal(Parser.lexer.next.value, [])
+            Parser.lexer.select_next()
+            return node
+
         elif Parser.lexer.next.type == "OPEN_PAR":
             Parser.lexer.select_next()
 
@@ -115,11 +128,11 @@ class Parser():
 
             if Parser.lexer.next.type != "CLOSE_PAR":
                 raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected CLOSE_PAR")
-                
+
             Parser.lexer.select_next()
             return expr
         else:
-            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT, PLUS, MINUS or OPEN_PAR")
+            raise Exception("[Parser] Unexpected token: " + Parser.lexer.next.type + ", expected INT or OPEN_PAR")
 
         
     def run(code: str):
@@ -180,6 +193,13 @@ class UnOp(Node):
             return central_value
         elif value == "MINUS":
             return -central_value
+        elif value == "FACT":
+            if central_value < 0:
+                raise Exception("[Semantic] Factorial of negative number")
+            resultado = 1
+            for i in range(2, central_value + 1):
+                resultado *= i
+            return resultado
         else:
             raise Exception("[Semantic] Invalid operator: " + value)
 
