@@ -588,6 +588,10 @@ class Cast(Node):
         elif target_type == "boolean":
             if operando.type == "boolean":
                 return Variable(operando.value, "boolean")
+            if operando.type in ("number", "float"):
+                return Variable(operando.value != 0, "boolean")
+            if operando.type == "string":
+                return Variable(len(operando.value) > 0, "boolean")
             raise Exception("[Semantic] Cannot cast " + operando.type + " to boolean")
         else:
             raise Exception("[Semantic] Unknown cast type: " + target_type)
